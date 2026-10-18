@@ -123,6 +123,12 @@ input[type=number]{width:72px}
    <div class="hint">ここの人数が毎日の基本です。日ごとに変えたいときは、シフト表の上にある「必要人数」の欄に数字を入れてください（黄色になります）。</div>
   </div>
   <div class="card">
+   <h3 style="margin:4px 0 8px">提出用Excelのひな形</h3>
+   <div class="row"><button class="pri" id="tplBtn">元のExcelを登録</button><button id="tplDel">登録を解除</button><input type="file" id="tplFile" accept=".xlsx" class="hidden"></div>
+   <div class="hint" id="tplStat"></div>
+   <div class="hint">先方に出している出勤予定表（.xlsx）を登録すると、Excel出力はそのファイルの書式・レイアウトのまま、氏名と日ごとの数字（1/2/3、休み希望は0で赤）と色だけを書き込みます。備考は氏名セルのコメントに入ります。ファイルはこの端末の中だけに保存されます。</div>
+  </div>
+  <div class="card">
    <h3 style="margin:4px 0 8px">ルール</h3>
    <div class="row"><label>1週間の最大稼働日数 <input type="number" id="maxWeek" min="1" max="7"></label></div>
    <div class="row"><label>週の始まり <select id="weekStart"><option value="0">日曜</option><option value="1">月曜</option></select></label></div>
@@ -334,7 +340,7 @@ $('impFile').onchange=function(){var f=this.files[0];if(!f)return;this.value='';
 function cv(v){if(v==null)return'';if(typeof v==='object'){if(v.result!==undefined)return String(v.result||'');if(v.richText)return v.richText.map(function(x){return x.text}).join('');return''}return String(v).trim()}
 function renderSet(){var T=S.settings.types;
  $('typeSet').innerHTML=[1,2,3].map(function(t){return '<div class="row" style="background:'+T[t].color+';border:1px solid var(--line);border-radius:10px;padding:6px"><b>'+t+'</b><input type="text" data-k="label" data-t="'+t+'" value="'+esc(T[t].label)+'" placeholder="例：8:00〜17:00" style="width:150px"><label>色 <input type="color" data-k="color" data-t="'+t+'" value="'+T[t].color+'"></label><label>人数 <input type="number" data-k="slots" data-t="'+t+'" min="0" value="'+T[t].slots+'"></label></div>'}).join('');
- $('maxWeek').value=S.settings.maxWeek;$('weekStart').value=S.settings.weekStart;$('sTitle').value=S.settings.title;$('sCompany').value=S.settings.company}
+ tplStatus();$('maxWeek').value=S.settings.maxWeek;$('weekStart').value=S.settings.weekStart;$('sTitle').value=S.settings.title;$('sCompany').value=S.settings.company}
 $('typeSet').addEventListener('input',function(e){var el=e.target;if(!el.dataset.k)return;var T=S.settings.types[el.dataset.t];T[el.dataset.k]=el.dataset.k==='slots'?Math.max(0,+el.value||0):el.value;save();if(el.dataset.k==='color')el.closest('.row').style.background=el.value});
 $('maxWeek').oninput=function(){S.settings.maxWeek=Math.max(1,Math.min(7,+this.value||5));save()};
 $('weekStart').onchange=function(){S.settings.weekStart=+this.value;save()};
@@ -347,6 +353,7 @@ $('bkImp').onclick=function(){$('bkFile').click()};
 $('bkFile').onchange=function(){var f=this.files[0];if(!f)return;this.value='';f.text().then(function(t){var o=JSON.parse(t);var d=o.data||o;if(!d.members||!d.settings)throw 0;if(!confirm('今のデータを置き換えますか？'))return;S=d;save();renderSet();toast('読み込みました')}).catch(function(){alert('バックアップファイルではないようです')})};
 function argb(hex){return 'FF'+hex.replace('#','').toUpperCase()}
 $('xlsx').onclick=function(){
+ if(localStorage.getItem(TPLKEY)){exportTemplate().catch(function(e){alert('ひな形への書き込みに失敗しました：'+e)});return}
  var y=cur.y,m=cur.m,M=mon(y,m),n=dim(y,m),T=S.settings.types;
  var wb=new ExcelJS.Workbook(),ws=wb.addWorksheet(y+' '+m+'月',{pageSetup:{orientation:'landscape',paperSize:8,fitToPage:true,fitToWidth:1,fitToHeight:1},views:[{state:'frozen',xSplit:4,ySplit:6}]});
  var FC=5,last=FC+n-1,sumC=last+1,noteC=last+2;
@@ -376,6 +383,50 @@ function printHTML(){var y=cur.y,m=cur.m,M=mon(y,m),n=dim(y,m),T=S.settings.type
  S.members.forEach(function(p,i){var cnt=0;h+='<tr><td>'+(i+1)+'</td><td style="white-space:nowrap;text-align:left">'+esc(p.name)+'</td>';for(var d=1;d<=n;d++){var off=isOff(M,p.id,d),v=val(M,p.id,d);if(v&&!off)cnt++;h+='<td class="'+(off?'off':v?'t'+v:'')+'" style="'+(v&&!off?'background:'+T[v].color:'')+'">'+(off?'休':v||'')+'</td>'}h+='<td>'+cnt+'</td><td style="text-align:left;font-size:8px">'+esc(p.note)+'</td></tr>'});
  return h+'</table>'}
 $('pdf').onclick=function(){$('print').innerHTML=printHTML();toast('印刷画面で「PDFとして保存」を選んでください');setTimeout(function(){window.print()},300)};
+var TPLKEY='shiftTool.tpl';
+function b64ToBuf(b){var s=atob(b),u=new Uint8Array(s.length);for(var i=0;i<s.length;i++)u[i]=s.charCodeAt(i);return u.buffer}
+function bufToB64(buf){var u=new Uint8Array(buf),s='';for(var i=0;i<u.length;i+=32768)s+=String.fromCharCode.apply(null,u.subarray(i,i+32768));return btoa(s)}
+function tplStatus(){var t=localStorage.getItem(TPLKEY+'.name');var e=$('tplStat');if(e)e.textContent=t?'登録済み：'+t+'（Excel出力はこのファイルの書式のまま書き出します）':'未登録（今は簡易レイアウトで書き出します）'}
+function dayColsOf(ws){var n=0;for(var c=10;c<=45;c++){var v=ws.getCell(5,c).value;if(v===null||v===undefined||v==='')break;n++}return n}
+function exportTemplate(){
+ var y=cur.y,m=cur.m,M=mon(y,m),n=dim(y,m),T=S.settings.types;
+ var wb=new ExcelJS.Workbook();
+ return wb.xlsx.load(b64ToBuf(localStorage.getItem(TPLKEY))).then(function(){
+  var sheets=wb.worksheets.slice(),pick=null;
+  for(var i=0;i<sheets.length;i++){if(dayColsOf(sheets[i])===n){pick=sheets[i];break}}
+  if(!pick){for(i=0;i<sheets.length;i++){if(dayColsOf(sheets[i])>=n){pick=sheets[i];break}}}
+  if(!pick)pick=sheets[0];
+  sheets.forEach(function(s){if(s!==pick)wb.removeWorksheet(s.id)});
+  var ws=pick;ws.name=y+' '+m+'月';
+  var FC=10,cols=dayColsOf(ws);
+  ws.getCell(4,FC).value=new Date(Date.UTC(y,m-1,1));
+  // template member rows
+  var R=0;for(var r=7;r<=200;r++){var nm=ws.getCell(r,9).value;if(nm===null||nm===undefined||nm===''){if(r>7)break}else R=r-6}
+  if(R<1)R=1;
+  var need=S.members.length,rows=Math.max(R,need),last=6+rows;
+  for(i=0;i<rows;i++){var rr=7+i;
+   if(i>=R){for(var c=1;c<=FC+cols-1;c++){var src=ws.getCell(6+R,c);var dst=ws.getCell(rr,c);dst.style=JSON.parse(JSON.stringify(src.style||{}))}var g0=ws.getCell(6+R,7).value;ws.getCell(rr,7).value=(g0&&g0.formula)?{formula:g0.formula}:g0}
+   var p=S.members[i];
+   if(p){if(p.company)ws.getCell(rr,7).value=p.company;if(p.ds)ws.getCell(rr,8).value=p.ds;var nc=ws.getCell(rr,9);nc.value=p.name;nc.note=p.note?p.note:undefined;if(!p.note){try{delete nc.note}catch(e){}}}
+   else{ws.getCell(rr,9).value=null}
+   for(var d=1;d<=cols;d++){var x=ws.getCell(rr,FC+d-1),st=JSON.parse(JSON.stringify(x.style||{}));
+    if(!p||d>n){x.value=null;delete st.fill;x.style=st;continue}
+    var off=isOff(M,p.id,d),v=val(M,p.id,d);
+    if(off){x.value=0;st.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFFF0000'}}}
+    else if(v){x.value=v;st.fill={type:'pattern',pattern:'solid',fgColor:{argb:argb(T[v].color)}}}
+    else{x.value=0;delete st.fill}
+    x.style=st}
+  }
+  for(d=1;d<=cols;d++){var cl=ws.getColumn(FC+d-1).letter,cnt=dayCounts(M,d).all;ws.getCell(3,FC+d-1).value=d<=n?{formula:'COUNTIF('+cl+'7:'+cl+last+',">0")',result:cnt}:null}
+  ws.pageSetup.printArea='A1:'+ws.getColumn(FC+cols-1).letter+last;
+  wb.calcProperties={fullCalcOnLoad:true};
+  return wb.xlsx.writeBuffer().then(function(buf){dl(new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}),'出勤予定表_'+y+'年'+m+'月.xlsx')});
+ });
+}
+
+$('tplBtn').onclick=function(){$('tplFile').click()};
+$('tplFile').onchange=function(){var f=this.files[0];if(!f)return;this.value='';f.arrayBuffer().then(function(b){try{localStorage.setItem(TPLKEY,bufToB64(b));localStorage.setItem(TPLKEY+'.name',f.name);tplStatus();toast('ひな形を登録しました')}catch(e){alert('ファイルが大きすぎて保存できませんでした')}})};
+$('tplDel').onclick=function(){localStorage.removeItem(TPLKEY);localStorage.removeItem(TPLKEY+'.name');tplStatus()};
 window.__shift={S:function(){return S},autoGen:autoGen,shortages:shortages,weekOver:weekOver,go:go,printHTML:printHTML,setCur:function(y,m){cur.y=y;cur.m=m;render()}};
 render();
 })();
