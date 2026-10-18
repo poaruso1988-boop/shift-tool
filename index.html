@@ -126,7 +126,7 @@ input[type=number]{width:72px}
    <h3 style="margin:4px 0 8px">提出用Excelのひな形</h3>
    <div class="row"><button class="pri" id="tplBtn">元のExcelを登録</button><button id="tplDel">登録を解除</button><input type="file" id="tplFile" accept=".xlsx" class="hidden"></div>
    <div class="hint" id="tplStat"></div>
-   <div class="hint">先方に出している出勤予定表（.xlsx）を登録すると、Excel出力はそのファイルの書式・レイアウトのまま、氏名と日ごとの数字（1/2/3、休み希望は0で赤）と色だけを書き込みます。備考は氏名セルのコメントに入ります。ファイルはこの端末の中だけに保存されます。</div>
+   <div class="hint">先方に出している出勤予定表（.xlsx）を登録すると、Excel出力はそのファイルの書式・レイアウトのまま、氏名と、元と同じ1（出勤）・0（休み）を書き込みます。時間1/2/3はマスの色で分け、休み希望は赤の0です。合計の式もそのまま使います。備考は氏名セルのコメントに入ります。ファイルはこの端末の中だけに保存されます。</div>
   </div>
   <div class="card">
    <h3 style="margin:4px 0 8px">ルール</h3>
@@ -413,11 +413,11 @@ function exportTemplate(){
     if(!p||d>n){x.value=null;delete st.fill;x.style=st;continue}
     var off=isOff(M,p.id,d),v=val(M,p.id,d);
     if(off){x.value=0;st.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFFF0000'}}}
-    else if(v){x.value=v;st.fill={type:'pattern',pattern:'solid',fgColor:{argb:argb(T[v].color)}}}
+    else if(v){x.value=1;st.fill={type:'pattern',pattern:'solid',fgColor:{argb:argb(T[v].color)}}}
     else{x.value=0;delete st.fill}
     x.style=st}
   }
-  for(d=1;d<=cols;d++){var cl=ws.getColumn(FC+d-1).letter,cnt=dayCounts(M,d).all;ws.getCell(3,FC+d-1).value=d<=n?{formula:'COUNTIF('+cl+'7:'+cl+last+',">0")',result:cnt}:null}
+  if(rows>R){for(d=1;d<=cols;d++){var c3=ws.getCell(3,FC+d-1),fv=c3.value;if(fv&&fv.formula)c3.value={formula:fv.formula.replace(/(\$?[A-Z]+\$?)(\d+)\)$/,function(_,c,r){return c+last+')'})}}}
   ws.pageSetup.printArea='A1:'+ws.getColumn(FC+cols-1).letter+last;
   wb.calcProperties={fullCalcOnLoad:true};
   return wb.xlsx.writeBuffer().then(function(buf){dl(new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}),'出勤予定表_'+y+'年'+m+'月.xlsx')});
